@@ -1,0 +1,68 @@
+# 项目元数据，以及 Ruff、mypy 的检查规则。
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medical-multi-agent"
+version = "0.1.0"
+description = "医疗多智能体问诊助手"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-dotenv>=1.0.0",
+    "openai>=1.0.0",
+    "langgraph>=1.2.0",
+    "chromadb>=0.5.0",
+    "neo4j>=5.0.0",
+    "dashscope>=1.20.0",
+    "redis>=5.0.0",
+    "langchain-text-splitters>=0.3.0",
+]
+
+[tool.setuptools]
+py-modules = ["api", "main_graph", "session_store", "medical_safety", "logging_config",
+              "chromadb创建", "语义分割", "neo4j导入", "pdf_to_markdown", "download_markdown", "split", "test"]
+packages = ["agent", "model"]
+
+# ---- Ruff：lint + format 一体，作为质量门禁 ----
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle 错误
+    "W",    # pycodestyle 警告
+    "F",    # pyflakes（未使用/未定义）
+    "I",    # isort（import 排序）
+    "N",    # pep8-naming（命名规范，可拦 My_model_client）
+    "B",    # flake8-bugbear（易错写法）
+    "UP",   # pyupgrade（现代化写法）
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501", # 行过长交给 formatter 处理
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 数据脚本是一次性本地任务，暂不强制命名/裸异常（后续应修）
+"语义分割.py" = ["N", "B", "E402"]
+"chromadb创建.py" = ["N", "B", "E402"]
+"neo4j导入.py" = ["N", "B", "E402"]
+"*.py" = []
+
+[tool.ruff.lint.flake8-bugbear]
+avoid-immutable-calls-in-loops = false
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---- 基础类型检查（渐进式，先不挡业务） ----
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = false

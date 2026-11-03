@@ -1,0 +1,50 @@
+# 不提交密钥、缓存、本地数据库和指南原文。
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime logs
+*.log
+logs/
+
+# Local databases and generated indexes
+chromadb/
+*.sqlite
+*.sqlite3
+
+# Large source/generated data
+medical.json
+rag_chunks.json
+current_batch_list.txt
+临床诊疗指南/
+guidelines_split/
+guidelines_md_zips/
+guidelines_md/
+
+# Generated exports
+*.pdf
+*.zip
+*.xlsx
+*.docx
+*.pptx

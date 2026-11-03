@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<!-- 问诊页面：左侧是历史会话，右侧是多轮对话，消息通过 /api 发给后端。 -->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>医疗智能问诊助手</title>
+  <style>
+    :root {
+      --bg: #eef3f7;
+      --panel: #ffffff;
+      --panel-soft: #f7fafc;
+      --primary: #0f766e;
+      --primary-strong: #115e59;
+      --accent: #2563eb;
+      --danger: #b91c1c;
+      --text: #172033;
+      --muted: #667085;
+      --border: #d8e0ea;
+      --user: #0f766e;
+      --bot: #ffffff;
+      --system: #eef8f3;
+      --shadow: 0 18px 50px rgba(22, 34, 51, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      width: 100vw;
+      height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    .app {
+      width: 100vw;
+      height: 100vh;
+      min-height: 0;
+      background: var(--panel);
+      border: 0;
+      box-shadow: none;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      min-width: 0;
+      border-right: 1px solid var(--border);
+      background: #f8fbfd;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+
+    .sidebar-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-head h2 {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .history-list {
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .history-item {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      padding: 10px;
+      cursor: pointer;
+    }
+
+    .history-item:hover {
+      background: #eef6f5;
+      border-color: #c8e6e1;
+    }
+
+    .history-item.active {
+      background: #e2f3f1;
+      border-color: #9bd0c8;
+    }
+
+    .history-title {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 650;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .history-empty {
+      padding: 12px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.5;
+    }
+
+    .chat-panel {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto auto;
+      overflow: hidden;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px 22px;
+      background: #123c44;
+      color: #fff;
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      line-height: 1.35;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #94a3b8;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.12);
+    }
+
+    .status-dot.ok {
+      background: #34d399;
+    }
+
+    .status-dot.bad {
+      background: #f87171;
+    }
+
+    .icon-button {
+      width: 40px;
+      height: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .messages {
+      overflow-y: auto;
+      padding: 22px;
+      background: var(--panel-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .message-row {
+      display: flex;
+      width: 100%;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .message-row.bot,
+    .message-row.system {
+      justify-content: flex-start;
+    }
+
+    .message {
+      max-width: min(760px, 86%);
+      border: 1px solid var(--border);
+      background: var(--bot);
+      line-height: 1.65;
+      font-size: 0.96rem;
+      padding: 13px 15px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .message.user {
+      color: #fff;
+      background: var(--user);
+      border-color: var(--user);
+    }
+
+    .message.system {
+      background: var(--system);
+      color: #14532d;
+      border-color: #bfe7d0;
+      font-size: 0.88rem;
+    }
+
+    .message.error {
+      background: #fff1f2;
+      color: var(--danger);
+      border-color: #fecdd3;
+    }
+
+    .message p {
+      margin: 0 0 10px;
+    }
+
+    .message h1,
+    .message h2,
+    .message h3 {
+      margin: 12px 0 8px;
+      line-height: 1.35;
+      color: #0f172a;
+      letter-spacing: 0;
+    }
+
+    .message h1 {
+      font-size: 1.1rem;
+    }
+
+    .message h2 {
+      font-size: 1.02rem;
+    }
+
+    .message h3 {
+      font-size: 0.98rem;
+    }
+
+    .message h1:first-child,
+    .message h2:first-child,
+    .message h3:first-child {
+      margin-top: 0;
+    }
+
+    .message p:last-child,
+    .message ul:last-child,
+    .message ol:last-child {
+      margin-bottom: 0;
+    }
+
+    .message ul,
+    .message ol {
+      margin: 8px 0 10px;
+      padding-left: 1.25rem;
+    }
+
+    .message li {
+      margin: 4px 0;
+    }
+
+    .message strong {
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .message.user strong {
+      color: #fff;
+    }
+
+    .message code {
+      padding: 2px 5px;
+      background: #eef2f7;
+      color: #0f172a;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+
+    .message .sources {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      color: #334155;
+      font-size: 0.9rem;
+    }
+
+    .message .sources strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #0f172a;
+    }
+
+    .typing {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+    }
+
+    .typing span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.1s infinite ease-in-out;
+    }
+
+    .typing span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .typing span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes pulse {
+      0%, 80%, 100% {
+        opacity: 0.25;
+        transform: translateY(0);
+      }
+      40% {
+        opacity: 1;
+        transform: translateY(-2px);
+      }
+    }
+
+    .composer {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      padding: 14px 18px;
+      background: #fff;
+      border-top: 1px solid var(--border);
+    }
+
+    .input-wrap {
+      min-width: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 48px;
+      max-height: 140px;
+      resize: none;
+      border: 1px solid var(--border);
+      outline: none;
+      padding: 12px 13px;
+      line-height: 1.5;
+      color: var(--text);
+      background: #fff;
+    }
+
+    textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+    }
+
+    textarea:disabled {
+      background: #f2f5f8;
+      color: var(--muted);
+    }
+
+    .send-button {
+      width: 52px;
+      height: 48px;
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .send-button:hover:not(:disabled) {
+      background: var(--primary-strong);
+    }
+
+    .send-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .footer-note {
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      background: #fbfdff;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .retry {
+      margin-top: 10px;
+      border: 1px solid #fda4af;
+      color: var(--danger);
+      background: #fff;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 700px) {
+      .app {
+        grid-template-columns: 1fr;
+        height: 100vh;
+        min-height: 100vh;
+        width: 100%;
+        border: 0;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .header {
+        padding: 14px 16px;
+      }
+
+      .brand p {
+        display: none;
+      }
+
+      .messages {
+        padding: 14px;
+      }
+
+      .message {
+        max-width: 92%;
+        font-size: 0.94rem;
+      }
+
+      .composer {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h2>历史对话</h2>
+      </div>
+      <div class="history-list" id="historyList">
+        <div class="history-empty">暂无历史对话</div>
+      </div>
+    </aside>
+
+    <section class="chat-panel">
+      <header class="header">
+        <div class="brand">
+          <h1>医疗智能问诊助手</h1>
+          <p>多轮问诊 · 指南检索 · 图谱辅助 · 来源追溯</p>
+        </div>
+        <div class="header-actions">
+          <span class="status-dot" id="statusDot" title="服务状态"></span>
+          <button class="icon-button" id="btnNew" title="新建对话" aria-label="新建对话">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="messages" id="messages" aria-live="polite"></section>
+
+      <form class="composer" id="composer">
+        <div class="input-wrap">
+          <textarea
+            id="input"
+            placeholder="请描述你的不适症状，例如：我小腹疼了 3 小时，没有发烧"
+            autocomplete="off"
+            rows="1"
+          ></textarea>
+        </div>
+        <button class="send-button" id="btnSend" type="submit" title="发送" aria-label="发送">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M3.4 20.4L21.8 12L3.4 3.6L3 10.2L14 12L3 13.8z"/>
+          </svg>
+        </button>
+      </form>
+
+      <div class="footer-note">仅供参考，不能替代医生诊断或处方；如症状严重、持续加重或出现急症表现，请及时就医。</div>
+    </section>
+  </main>
+
+  <script>
+    let sessionId = null;
+    let loading = false;
+    let lastFailedMessage = "";
+
+    const messagesEl = document.getElementById("messages");
+    const inputEl = document.getElementById("input");
+    const btnSend = document.getElementById("btnSend");
+    const btnNew = document.getElementById("btnNew");
+    const composer = document.getElementById("composer");
+    const statusDot = document.getElementById("statusDot");
+    const historyList = document.getElementById("historyList");
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function renderInlineMarkdown(text) {
+      return escapeHtml(text || "")
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    }
+
+    function renderText(text) {
+      const blocks = String(text || "").trim().split(/\n{2,}/).filter(Boolean);
+      if (!blocks.length) return "";
+
+      return blocks.map((block) => {
+        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+        if (lines.length === 1) {
+          const heading = lines[0].match(/^(#{1,3})\s+(.+)$/);
+          if (heading) {
+            const level = heading[1].length;
+            return `<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`;
+          }
+        }
+
+        const numbered = lines.every((line) => /^\d+[.、]\s*/.test(line));
+        const bulleted = lines.every((line) => /^[-•]\s*/.test(line));
+
+        if (numbered || bulleted) {
+          const tag = numbered ? "ol" : "ul";
+          const items = lines.map((line) => {
+            const clean = line.replace(/^(\d+[.、]|[-•])\s*/, "");
+            return `<li>${renderInlineMarkdown(clean)}</li>`;
+          }).join("");
+          return `<${tag}>${items}</${tag}>`;
+        }
+
+        return `<p>${lines.map(renderInlineMarkdown).join("<br>")}</p>`;
+      }).join("");
+    }
+
+    function splitSources(text) {
+      const match = String(text || "").match(/\n?\s*参考来源[:：]?\s*\n?/);
+      if (!match) return { answer: text, sources: "" };
+      const index = match.index;
+      return {
+        answer: text.slice(0, index).trim(),
+        sources: text.slice(index + match[0].length).trim(),
+      };
+    }
+
+    function renderSources(sources) {
+      const lines = String(sources || "").split("\n").map((line) => line.trim()).filter(Boolean);
+      const normalized = lines.map((line, index) => {
+        if (/^\d+[.、]\s*/.test(line)) return line;
+        return `${index + 1}. ${line}`;
+      }).join("\n");
+      return renderText(normalized);
+    }
+
+    function appendMessage(text, role, options = {}) {
+      const row = document.createElement("div");
+      row.className = `message-row ${role}`;
+
+      const div = document.createElement("div");
+      div.className = `message ${role}${options.error ? " error" : ""}`;
+
+      if (role === "bot") {
+        const { answer, sources } = splitSources(text);
+        div.innerHTML = renderText(answer);
+        if (sources) {
+          const sourceDiv = document.createElement("div");
+          sourceDiv.className = "sources";
+          sourceDiv.innerHTML = `<strong>参考来源</strong>${renderSources(sources)}`;
+          div.appendChild(sourceDiv);
+        }
+      } else {
+        div.innerHTML = renderText(text);
+      }
+
+      if (options.retry) {
+        const retry = document.createElement("button");
+        retry.className = "retry";
+        retry.type = "button";
+        retry.textContent = "重试";
+        retry.addEventListener("click", () => sendMessage(options.retry));
+        div.appendChild(retry);
+      }
+
+      row.appendChild(div);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return row;
+    }
+
+    function renderHistory(items) {
+      historyList.innerHTML = "";
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "history-empty";
+        empty.textContent = "暂无历史对话";
+        historyList.appendChild(empty);
+        return;
+      }
+
+      items.forEach((item) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `history-item${item.session_id === sessionId ? " active" : ""}`;
+        button.innerHTML = `
+          <span class="history-title">${escapeHtml(item.title || "新对话")}</span>
+          <span class="history-meta">${item.turn_count || 0} 轮 · ${item.dialogue_complete ? "已完成" : "进行中"}</span>
+        `;
+        button.addEventListener("click", () => openSession(item.session_id));
+        historyList.appendChild(button);
+      });
+    }
+
+    async function loadSessions() {
+      try {
+        const res = await fetch("/api/sessions");
+        if (!res.ok) return;
+        const items = await res.json();
+        renderHistory(items);
+      } catch (error) {
+        renderHistory([]);
+      }
+    }
+
+    async function openSession(id) {
+      if (loading || id === sessionId) return;
+      try {
+        const res = await fetch(`/api/session/${encodeURIComponent(id)}`);
+        if (!res.ok) throw new Error("加载会话失败");
+        const data = await res.json();
+        sessionId = data.session_id;
+        messagesEl.innerHTML = "";
+        if (!data.messages.length) {
+          appendMessage("这个会话还没有消息。", "system");
+        }
+        data.messages.forEach((message) => {
+          appendMessage(message.content, message.role === "user" ? "user" : "bot");
+        });
+        resizeInput();
+        inputEl.focus();
+        await loadSessions();
+      } catch (error) {
+        appendMessage("加载历史对话失败。", "system", { error: true });
+      }
+    }
+
+    function updateBotMessage(row, text) {
+      const div = row.querySelector(".message");
+      const { answer, sources } = splitSources(text);
+      div.innerHTML = renderText(answer);
+      if (sources) {
+        const sourceDiv = document.createElement("div");
+        sourceDiv.className = "sources";
+        sourceDiv.innerHTML = `<strong>参考来源</strong>${renderSources(sources)}`;
+        div.appendChild(sourceDiv);
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function appendStreamingMessage(text) {
+      const row = appendMessage("", "bot");
+      const content = String(text || "");
+      const step = Math.max(2, Math.ceil(content.length / 160));
+      let index = 0;
+
+      return new Promise((resolve) => {
+        const tick = () => {
+          index = Math.min(content.length, index + step);
+          updateBotMessage(row, content.slice(0, index));
+          if (index < content.length) {
+            window.setTimeout(tick, 18);
+            return;
+          }
+          resolve();
+        };
+        tick();
+      });
+    }
+
+    function showTyping(label = "正在处理") {
+      hideTyping();
+      const row = document.createElement("div");
+      row.className = "message-row bot";
+      row.id = "typing";
+      row.innerHTML = `
+        <div class="message bot">
+          <span class="typing">${label}<span></span><span></span><span></span></span>
+        </div>
+      `;
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function hideTyping() {
+      const el = document.getElementById("typing");
+      if (el) el.remove();
+    }
+
+    function setLoading(value) {
+      loading = value;
+      btnSend.disabled = value;
+      inputEl.disabled = value;
+    }
+
+    function resizeInput() {
+      inputEl.style.height = "auto";
+      inputEl.style.height = `${Math.min(inputEl.scrollHeight, 140)}px`;
+    }
+
+    async function createSession() {
+      const res = await fetch("/api/session", { method: "POST" });
+      if (!res.ok) throw new Error("创建会话失败");
+      const data = await res.json();
+      sessionId = data.session_id;
+      await loadSessions();
+      return sessionId;
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        statusDot.classList.toggle("ok", data.status === "ok");
+        statusDot.classList.toggle("bad", data.status !== "ok");
+        statusDot.title = data.status === "ok" ? "服务正常" : "服务降级";
+      } catch (error) {
+        statusDot.classList.add("bad");
+        statusDot.classList.remove("ok");
+        statusDot.title = "服务不可用";
+      }
+    }
+
+    async function ensureSession() {
+      if (sessionId) return sessionId;
+      showTyping("正在连接服务");
+      try {
+        return await createSession();
+      } finally {
+        hideTyping();
+      }
+    }
+
+    async function sendMessage(forcedText) {
+      const text = (forcedText ?? inputEl.value).trim();
+      if (!text || loading) return;
+
+      try {
+        await ensureSession();
+      } catch (error) {
+        appendMessage("无法连接服务器，请确认后端已启动。", "system", { error: true, retry: text });
+        return;
+      }
+
+      if (!forcedText) {
+        appendMessage(text, "user");
+        inputEl.value = "";
+        resizeInput();
+      }
+
+      lastFailedMessage = text;
+      setLoading(true);
+      showTyping("正在分析问诊信息");
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, message: text }),
+        });
+
+        hideTyping();
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          appendMessage(err.detail || "请求失败，请稍后重试。", "system", { error: true, retry: text });
+          return;
+        }
+
+        const data = await res.json();
+        await appendStreamingMessage(data.reply);
+        lastFailedMessage = "";
+        await loadSessions();
+
+        if (data.status === "complete") {
+          appendMessage("本次问诊已完成。", "system");
+        }
+      } catch (error) {
+        hideTyping();
+        appendMessage("网络错误，请检查后端服务是否运行。", "system", { error: true, retry: text || lastFailedMessage });
+      } finally {
+        setLoading(false);
+        inputEl.focus();
+      }
+    }
+
+    async function newChat() {
+      sessionId = null;
+      lastFailedMessage = "";
+      messagesEl.innerHTML = "";
+      appendMessage("你好，请描述你的不适症状。我会逐步追问必要信息，并在完成后给出参考建议。", "system");
+      inputEl.value = "";
+      resizeInput();
+      inputEl.focus();
+      try {
+        await createSession();
+      } catch (error) {
+        appendMessage("无法连接服务器，请确认后端已启动（python api.py）。", "system", { error: true });
+      }
+    }
+
+    composer.addEventListener("submit", (event) => {
+      event.preventDefault();
+      sendMessage();
+    });
+
+    inputEl.addEventListener("input", resizeInput);
+    inputEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
+    btnNew.addEventListener("click", newChat);
+
+    appendMessage("你好，请描述你的不适症状。我会逐步追问必要信息，并在完成后给出参考建议。", "system");
+    resizeInput();
+    checkHealth();
+    loadSessions();
+    createSession().catch(() => {
+      appendMessage("提示：请先启动后端服务。", "system", { error: true });
+    });
+  </script>
+</body>
+</html>
